@@ -25,7 +25,14 @@ actix-web = "4"
 actix-rt = "2"
 
 # Database
-sea-orm = { version = "1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+sea-orm = { version = "1", features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+] }
+sea-orm-migration = { version = "1", features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+] }
 
 # Observability
 tracing = "0.1"

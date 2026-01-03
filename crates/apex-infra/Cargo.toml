@@ -10,6 +10,7 @@ async-trait.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+chrono.workspace = true
 
 # Database - use workspace dependency but make it optional for feature flags
 sea-orm = { workspace = true, optional = true }

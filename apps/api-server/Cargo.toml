@@ -7,6 +7,10 @@ edition.workspace = true
 name = "api-server"
 path = "src/main.rs"
 
+[features]
+default = ["postgres"]
+postgres = ["apex-infra/postgres"]
+
 [dependencies]
 # Internal crates
 apex-core.workspace = true
@@ -26,6 +30,7 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 dotenvy.workspace = true
+async-trait.workspace = true
 
 # Observability
 tracing.workspace = true

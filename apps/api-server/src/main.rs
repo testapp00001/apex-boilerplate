@@ -30,7 +30,7 @@ async fn main() -> std::io::Result<()> {
     );
 
     // Build application state
-    let state = AppState::new().await;
+    let state = AppState::new(config.database.as_ref()).await;
 
     // Start HTTP server
     HttpServer::new(move || {
