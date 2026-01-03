@@ -1,0 +1,33 @@
+[package]
+name = "api-server"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "api-server"
+path = "src/main.rs"
+
+[dependencies]
+# Internal crates
+apex-core.workspace = true
+apex-infra.workspace = true
+apex-shared.workspace = true
+
+# Runtime
+tokio.workspace = true
+actix-web.workspace = true
+actix-rt.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Utilities
+uuid.workspace = true
+chrono.workspace = true
+dotenvy.workspace = true
+
+# Observability
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-actix-web.workspace = true

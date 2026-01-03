@@ -1,0 +1,19 @@
+[package]
+name = "apex-infra"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+apex-core.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+# Database - use workspace dependency but make it optional for feature flags
+sea-orm = { workspace = true, optional = true }
+
+[features]
+default = ["postgres"]
+postgres = ["sea-orm"]

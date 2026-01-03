@@ -1,6 +1,38 @@
-[package]
-name = "apex-project"
+[workspace]
+members = ["crates/*", "apps/*"]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+authors = ["Apex Team"]
+license = "MIT"
 
-[dependencies]
+[workspace.dependencies]
+# Core
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+dotenvy = "0.15"
+
+# Web
+actix-web = "4"
+actix-rt = "2"
+
+# Database
+sea-orm = { version = "1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-actix-web = "0.7"
+
+# Internal crates
+apex-core = { path = "crates/apex-core" }
+apex-infra = { path = "crates/apex-infra" }
+apex-shared = { path = "crates/apex-shared" }
