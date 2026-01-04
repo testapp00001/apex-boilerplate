@@ -2,6 +2,8 @@
 name = "apex-infra"
 version.workspace = true
 edition.workspace = true
+description = "Infrastructure implementations for Apex backend"
+readme = "README.md"
 
 [dependencies]
 apex-core.workspace = true
@@ -13,16 +15,24 @@ uuid.workspace = true
 chrono.workspace = true
 serde.workspace = true
 
-# Database - use workspace dependency but make it optional for feature flags
+# Database (optional - enabled with postgres feature)
 sea-orm = { workspace = true, optional = true }
 
-# Authentication
-jsonwebtoken.workspace = true
-argon2.workspace = true
+# Authentication (optional - enabled with auth feature)
+jsonwebtoken = { workspace = true, optional = true }
+argon2 = { workspace = true, optional = true }
 
-# Rate limiting
-governor.workspace = true
+# Rate limiting (optional - enabled with rate-limit feature)
+governor = { workspace = true, optional = true }
 
 [features]
-default = ["postgres"]
+default = ["full"]
+
+# Feature bundles
+full = ["postgres", "auth", "rate-limit"]
+minimal = []                              # No external dependencies
+
+# Individual features
 postgres = ["sea-orm"]
+auth = ["jsonwebtoken", "argon2"]
+rate-limit = ["governor"]

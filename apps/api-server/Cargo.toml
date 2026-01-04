@@ -2,14 +2,32 @@
 name = "api-server"
 version.workspace = true
 edition.workspace = true
+description = "Apex API Server - Production-ready Rust backend"
+readme = "README.md"
 
 [[bin]]
 name = "api-server"
 path = "src/main.rs"
 
 [features]
-default = ["postgres"]
+default = ["full"]
+
+# Feature bundles
+full = ["postgres", "auth", "rate-limit", "scheduler", "websocket"]
+minimal = []                                                        # Bare minimum - just HTTP server
+
+# Database
 postgres = ["apex-infra/postgres"]
+
+# Authentication & Rate Limiting
+auth = ["apex-infra/auth"]
+rate-limit = ["apex-infra/rate-limit"]
+
+# Background processing
+scheduler = ["tokio-cron-scheduler"]
+websocket = ["socketioxide", "tower"]
+
+# Observability
 otel = [
     "opentelemetry",
     "opentelemetry_sdk",
@@ -46,12 +64,12 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-actix-web.workspace = true
 
-# Background Jobs
-tokio-cron-scheduler.workspace = true
+# Background Jobs (optional)
+tokio-cron-scheduler = { workspace = true, optional = true }
 
-# WebSockets
-socketioxide.workspace = true
-tower.workspace = true
+# WebSockets (optional)
+socketioxide = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
 
 # OpenTelemetry (optional)
 opentelemetry = { workspace = true, optional = true }
