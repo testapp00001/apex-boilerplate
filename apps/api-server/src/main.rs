@@ -10,28 +10,33 @@ use tracing_actix_web::TracingLogger;
 mod config;
 mod handlers;
 mod middleware;
+mod observability;
 mod state;
+mod telemetry;
 
 use apex_core::ports::{RateLimiter, TokenService};
 use apex_infra::{InMemoryRateLimiter, JwtTokenService};
 use config::AppConfig;
+use observability::RequestIdMiddleware;
 use state::AppState;
+use telemetry::TelemetryConfig;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Load .env file if present
     dotenvy::dotenv().ok();
 
-    // Initialize tracing
-    init_tracing();
+    // Initialize telemetry (tracing, alerts)
+    let telemetry_config = TelemetryConfig::from_env();
+    telemetry::init_telemetry(&telemetry_config);
 
     // Load configuration
     let config = AppConfig::from_env();
 
     tracing::info!(
-        "Starting Apex API Server on {}:{}",
-        config.host,
-        config.port
+        host = %config.host,
+        port = %config.port,
+        "Starting Apex API Server"
     );
 
     // Build application state
@@ -46,6 +51,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             // Middleware (order matters - first added = outermost)
             .wrap(TracingLogger::default())
+            .wrap(RequestIdMiddleware)
             .wrap(middleware::rate_limit::RateLimitMiddleware::new(
                 rate_limiter.clone(),
             ))
@@ -93,16 +99,4 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
-}
-
-fn init_tracing() {
-    use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
-
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,api_server=debug,apex_infra=debug"));
-
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(tracing_subscriber::fmt::layer().pretty())
-        .init();
 }

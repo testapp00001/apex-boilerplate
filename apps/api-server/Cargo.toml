@@ -10,6 +10,12 @@ path = "src/main.rs"
 [features]
 default = ["postgres"]
 postgres = ["apex-infra/postgres"]
+otel = [
+    "opentelemetry",
+    "opentelemetry_sdk",
+    "opentelemetry-otlp",
+    "tracing-opentelemetry",
+]
 
 [dependencies]
 # Internal crates
@@ -31,11 +37,17 @@ uuid.workspace = true
 chrono.workspace = true
 dotenvy.workspace = true
 async-trait.workspace = true
+thiserror.workspace = true
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
 
 # Observability
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-actix-web.workspace = true
 
-# Utilities
-futures = "0.3"
+# OpenTelemetry (optional)
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
