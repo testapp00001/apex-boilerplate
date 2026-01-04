@@ -1,0 +1,46 @@
+# Build artifacts
+target/
+*.rlib
+*.rmeta
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation (not needed in image)
+docs/
+*.md
+!README.md
+
+# Local configuration
+.env
+.env.local
+.env.*.local
+
+# Docker files (avoid recursion)
+docker-compose*.yml
+Dockerfile*
+
+# Tests
+tests/
+*_test.rs
+
+# Artifacts and caches
+.cargo/
+.rustup/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# LLM/AI artifacts
+llms/
+.gemini/
