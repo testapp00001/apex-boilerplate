@@ -39,6 +39,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-actix-web = "0.7"
 
+# Authentication
+jsonwebtoken = "9"
+argon2 = "0.5"
+
+# Rate limiting
+governor = "0.8"
+
 # Internal crates
 apex-core = { path = "crates/apex-core" }
 apex-infra = { path = "crates/apex-infra" }
