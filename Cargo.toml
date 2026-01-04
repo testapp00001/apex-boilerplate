@@ -50,6 +50,13 @@ argon2 = "0.5"
 # Rate limiting
 governor = "0.8"
 
+# Background Jobs & Scheduling
+tokio-cron-scheduler = "0.13"
+
+# WebSockets
+socketioxide = { version = "0.14", features = ["state"] }
+tower = "0.5"
+
 # Internal crates
 apex-core = { path = "crates/apex-core" }
 apex-infra = { path = "crates/apex-infra" }
