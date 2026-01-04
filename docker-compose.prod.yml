@@ -1,0 +1,90 @@
+# =============================================================================
+# Apex API - Production Docker Compose Override
+# =============================================================================
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+
+services:
+  api:
+    # Use pre-built image instead of building
+    image: ${APEX_IMAGE:-apex-api:latest}
+    build: null  # Disable build in production
+    
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
+      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-100}
+      - DB_MIN_CONNECTIONS=${DB_MIN_CONNECTIONS:-10}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
+      - JWT_ISSUER=${JWT_ISSUER:-apex-api}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+      - RATE_LIMIT_WINDOW_SECS=${RATE_LIMIT_WINDOW_SECS:-60}
+      - RUST_LOG=${RUST_LOG:-info}
+      - LOG_FORMAT=json
+      - ALERTS_ENABLED=true
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL}
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    restart: always
+
+  postgres:
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-apex_db}
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    restart: always
+
+  redis:
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    restart: always

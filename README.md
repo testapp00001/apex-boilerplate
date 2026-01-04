@@ -154,6 +154,62 @@ GET  /api/auth/me        # Requires: Authorization: Bearer <token>
 └─────────────────────────────────────────────────────┘
 ```
 
+## 🐳 Docker
+
+### Quick Start with Docker Compose
+
+```bash
+# Start all services (API + PostgreSQL + Redis)
+docker-compose up -d
+
+# Or use the helper script
+./scripts/docker-dev.sh
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f api
+
+# Run migrations
+docker-compose exec api ./migration up
+
+# Stop services
+docker-compose down
+```
+
+### Build Production Image
+
+```bash
+# Build optimized image
+docker build -t apex-api .
+
+# Run standalone
+docker run -p 8080:8080 \
+  -e DATABASE_URL=postgres://user:pass@host:5432/db \
+  -e JWT_SECRET=your-secret \
+  apex-api
+```
+
+### Production Deployment
+
+```bash
+# Use production compose file
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### Helper Script Commands
+
+```bash
+./scripts/docker-dev.sh up       # Start services
+./scripts/docker-dev.sh build    # Build and start
+./scripts/docker-dev.sh down     # Stop services
+./scripts/docker-dev.sh logs     # Follow logs
+./scripts/docker-dev.sh migrate  # Run migrations
+./scripts/docker-dev.sh psql     # Connect to PostgreSQL
+./scripts/docker-dev.sh health   # Check API health
+```
+
 ## 📝 License
 
 MIT License - see [LICENSE](LICENSE) for details.
