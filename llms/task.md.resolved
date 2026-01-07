@@ -1,0 +1,24 @@
+# Apex Boilerplate Optimization & Test Coverage
+
+## Phase 1: High Priority Optimizations
+- [x] Fix password service injection (avoid per-request instantiation)
+- [x] Fix N+1 query in repository save (use upsert)
+- [x] Replace blocking RwLock with tokio::sync::RwLock in cache
+- [x] Implement missing job retry re-enqueue logic
+
+## Phase 2: Medium Priority Refactoring
+- [x] Fix hardcoded expires_in and fake created_at
+- [/] Update deprecated chrono::Duration to TimeDelta
+- [ ] Add validator crate for request validation
+- [ ] Add background cache cleanup task
+
+## Phase 3: Low Priority & Security
+- [ ] Improve constraint detection in postgres_repo
+- [ ] Add JWT secret validation for production
+
+## Phase 4: Test Coverage Setup
+- [ ] Configure cargo test and coverage tools (cargo-tarpaulin/llvm-cov)
+- [ ] Add unit tests for apex-core domain/ports
+- [ ] Add unit tests for apex-infra implementations
+- [ ] Add integration tests for api-server handlers
+- [ ] Generate coverage report

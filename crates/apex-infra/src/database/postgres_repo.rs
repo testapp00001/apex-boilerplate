@@ -1,7 +1,7 @@
 //! PostgreSQL implementation of the UserRepository trait.
 
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DbConn, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DbConn, DbErr, EntityTrait, QueryFilter, Set};
 use uuid::Uuid;
 
 use apex_core::domain::User;
@@ -19,12 +19,35 @@ impl PostgresUserRepository {
     pub fn new(db: DbConn) -> Self {
         Self { db }
     }
+
+    /// Convert SeaORM DbErr to RepoError with proper constraint detection.
+    fn map_db_error(e: DbErr) -> RepoError {
+        match &e {
+            DbErr::Query(runtime_err) => {
+                let err_str = runtime_err.to_string();
+                if err_str.contains("duplicate") || err_str.contains("unique") {
+                    RepoError::Constraint("Email already exists".to_string())
+                } else {
+                    RepoError::Query(e.to_string())
+                }
+            }
+            DbErr::Exec(runtime_err) => {
+                let err_str = runtime_err.to_string();
+                if err_str.contains("duplicate") || err_str.contains("unique") {
+                    RepoError::Constraint("Email already exists".to_string())
+                } else {
+                    RepoError::Query(e.to_string())
+                }
+            }
+            _ => RepoError::Query(e.to_string()),
+        }
+    }
 }
 
 #[async_trait]
 impl UserRepository for PostgresUserRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, RepoError> {
-        tracing::debug!("Finding user by id: {}", id);
+        tracing::debug!(user_id = %id, "Finding user by id");
 
         let result = UserEntity::find_by_id(id)
             .one(&self.db)
@@ -35,7 +58,7 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, RepoError> {
-        tracing::debug!("Finding user by email: {}", email);
+        tracing::debug!(user_email = %email, "Finding user by email");
 
         let result = UserEntity::find()
             .filter(user::Column::Email.eq(email))
@@ -47,45 +70,52 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn save(&self, user: User) -> Result<User, RepoError> {
-        tracing::debug!("Saving user: {}", user.id);
+        tracing::debug!(user_id = %user.id, "Saving user");
 
-        // Check if user exists
-        let existing = UserEntity::find_by_id(user.id)
-            .one(&self.db)
-            .await
-            .map_err(|e| RepoError::Query(e.to_string()))?;
+        let now = chrono::Utc::now();
 
-        let model = if existing.is_some() {
-            // Update existing user
-            let active_model = user::ActiveModel {
-                id: Set(user.id),
-                email: Set(user.email.clone()),
-                password_hash: Set(user.password_hash.clone()),
-                created_at: Set(user.created_at.into()),
-                updated_at: Set(chrono::Utc::now().into()),
-            };
+        // Use insert-first upsert pattern: attempt insert, fallback to update on conflict
+        // This avoids the N+1 query pattern of first checking if user exists
+        let active_model = user::ActiveModel {
+            id: Set(user.id),
+            email: Set(user.email.clone()),
+            password_hash: Set(user.password_hash.clone()),
+            created_at: Set(user.created_at.into()),
+            updated_at: Set(now.into()),
+        };
 
-            active_model
-                .update(&self.db)
-                .await
-                .map_err(|e| RepoError::Query(e.to_string()))?
-        } else {
-            // Insert new user
-            let active_model = user::ActiveModel {
-                id: Set(user.id),
-                email: Set(user.email.clone()),
-                password_hash: Set(user.password_hash.clone()),
-                created_at: Set(user.created_at.into()),
-                updated_at: Set(user.updated_at.into()),
-            };
+        // Try insert first - most common case for new users
+        let result = active_model.insert(&self.db).await;
 
-            active_model.insert(&self.db).await.map_err(|e| {
-                if e.to_string().contains("duplicate") || e.to_string().contains("unique") {
-                    RepoError::Constraint("Email already exists".to_string())
+        let model = match result {
+            Ok(m) => m,
+            Err(e) => {
+                // Check if it's a duplicate/unique constraint violation (user exists)
+                let is_conflict = match &e {
+                    DbErr::Query(re) | DbErr::Exec(re) => {
+                        let s = re.to_string();
+                        s.contains("duplicate") || s.contains("unique")
+                    }
+                    _ => false,
+                };
+
+                if is_conflict {
+                    // User exists, perform update instead
+                    let update_model = user::ActiveModel {
+                        id: Set(user.id),
+                        email: Set(user.email.clone()),
+                        password_hash: Set(user.password_hash.clone()),
+                        created_at: Set(user.created_at.into()),
+                        updated_at: Set(now.into()),
+                    };
+                    update_model
+                        .update(&self.db)
+                        .await
+                        .map_err(Self::map_db_error)?
                 } else {
-                    RepoError::Query(e.to_string())
+                    return Err(Self::map_db_error(e));
                 }
-            })?
+            }
         };
 
         Ok(model.into())

@@ -37,7 +37,7 @@ use state::AppState;
 use telemetry::TelemetryConfig;
 
 #[cfg(feature = "auth")]
-use apex_core::ports::TokenService;
+use apex_core::ports::{PasswordService, TokenService};
 
 #[cfg(feature = "rate-limit")]
 use apex_core::ports::RateLimiter;
@@ -66,6 +66,10 @@ async fn main() -> std::io::Result<()> {
     // Create services based on features
     #[cfg(feature = "auth")]
     let token_service: Arc<dyn TokenService> = Arc::new(apex_infra::JwtTokenService::from_env());
+
+    #[cfg(feature = "auth")]
+    let password_service: Arc<dyn PasswordService> =
+        Arc::new(apex_infra::Argon2PasswordService::new());
 
     #[cfg(feature = "rate-limit")]
     let rate_limiter: Arc<dyn RateLimiter> = Arc::new(apex_infra::InMemoryRateLimiter::from_env());
@@ -142,6 +146,9 @@ async fn main() -> std::io::Result<()> {
         #[cfg(feature = "auth")]
         let token_service_clone = token_service.clone();
 
+        #[cfg(feature = "auth")]
+        let password_service_clone = password_service.clone();
+
         // Build app with all middleware upfront
         #[cfg(all(feature = "rate-limit"))]
         let app = App::new()
@@ -162,7 +169,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(job_queue.clone()));
 
         #[cfg(feature = "auth")]
-        let app = app.app_data(web::Data::new(token_service_clone));
+        let app = app
+            .app_data(web::Data::new(token_service_clone))
+            .app_data(web::Data::new(password_service_clone));
 
         // Configure routes
         app.configure(handlers::configure_routes)

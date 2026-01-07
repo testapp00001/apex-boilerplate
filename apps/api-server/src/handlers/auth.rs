@@ -4,8 +4,7 @@ use actix_web::{HttpResponse, web};
 use std::sync::Arc;
 
 use apex_core::domain::User;
-use apex_core::ports::{PasswordService, TokenService, UserRepository};
-use apex_infra::Argon2PasswordService;
+use apex_core::ports::{PasswordService, TokenService};
 use apex_shared::dto::{AuthResponse, LoginRequest, RegisterUserRequest, UserResponse};
 
 use crate::middleware::auth::Identity;
@@ -16,6 +15,7 @@ use crate::state::AppState;
 pub async fn register(
     state: web::Data<AppState>,
     token_service: web::Data<Arc<dyn TokenService>>,
+    password_service: web::Data<Arc<dyn PasswordService>>,
     body: web::Json<RegisterUserRequest>,
 ) -> AppResult<HttpResponse> {
     let req = body.into_inner();
@@ -36,7 +36,6 @@ pub async fn register(
     }
 
     // Hash password
-    let password_service = Argon2PasswordService::new();
     let password_hash = password_service
         .hash(&req.password)
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -53,7 +52,7 @@ pub async fn register(
     Ok(HttpResponse::Created().json(AuthResponse {
         access_token: token,
         token_type: "Bearer".to_string(),
-        expires_in: 86400, // 24 hours
+        expires_in: token_service.expiration_seconds() as u64,
     }))
 }
 
@@ -61,6 +60,7 @@ pub async fn register(
 pub async fn login(
     state: web::Data<AppState>,
     token_service: web::Data<Arc<dyn TokenService>>,
+    password_service: web::Data<Arc<dyn PasswordService>>,
     body: web::Json<LoginRequest>,
 ) -> AppResult<HttpResponse> {
     let req = body.into_inner();
@@ -73,7 +73,6 @@ pub async fn login(
         .ok_or_else(|| AppError::Unauthorized)?;
 
     // Verify password
-    let password_service = Argon2PasswordService::new();
     let valid = password_service
         .verify(&req.password, &user.password_hash)
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -90,7 +89,7 @@ pub async fn login(
     Ok(HttpResponse::Ok().json(AuthResponse {
         access_token: token,
         token_type: "Bearer".to_string(),
-        expires_in: 86400,
+        expires_in: token_service.expiration_seconds() as u64,
     }))
 }
 

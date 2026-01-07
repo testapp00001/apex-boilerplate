@@ -115,11 +115,13 @@ impl JobQueue for InMemoryJobQueue {
         let handler = Arc::new(handler);
         let receiver = self.job_receiver.clone();
         let stats = self.stats.clone();
+        let sender = self.job_sender.clone();
 
         for worker_id in 0..self.config.workers {
             let handler = handler.clone();
             let receiver = receiver.clone();
             let stats = stats.clone();
+            let sender = sender.clone();
 
             tokio::spawn(async move {
                 tracing::info!("Job worker {} started", worker_id);
@@ -161,7 +163,21 @@ impl JobQueue for InMemoryJobQueue {
                                             reason = %reason,
                                             "Job failed, will retry"
                                         );
-                                        // Re-enqueue for retry
+                                        // Actually re-enqueue the job for retry
+                                        // Small delay before retry to prevent tight loops
+                                        let sender = sender.clone();
+                                        tokio::spawn(async move {
+                                            tokio::time::sleep(tokio::time::Duration::from_millis(
+                                                100 * job.attempts as u64,
+                                            ))
+                                            .await;
+                                            if let Err(e) = sender.send(job).await {
+                                                tracing::error!(
+                                                    "Failed to re-enqueue job for retry: {}",
+                                                    e
+                                                );
+                                            }
+                                        });
                                         stats.pending.fetch_add(1, Ordering::Relaxed);
                                     } else {
                                         stats.failed.fetch_add(1, Ordering::Relaxed);

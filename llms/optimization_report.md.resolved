@@ -1,0 +1,347 @@
+# Apex Boilerplate - Optimization & Refactoring Analysis
+
+A comprehensive analysis of optimization opportunities across the codebase.
+
+---
+
+## Overview
+
+After reviewing the entire codebase, I identified **12 key areas** for improvement spanning performance, code organization, security, and maintainability.
+
+| Priority | Category | Impact |
+|----------|----------|--------|
+| 🔴 High | Performance bottlenecks | Direct runtime impact |
+| 🟠 Medium | Code organization | Developer experience |
+| 🟢 Low | Nice-to-have | Polish |
+
+---
+
+## 🔴 High Priority Optimizations
+
+### 1. Password Service Instantiation Per Request
+
+**File**: [auth.rs](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs#L39)
+
+**Issue**: `Argon2PasswordService::new()` is created on every [register](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs#15-59) and [login](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs#60-96) request.
+
+```rust
+// Current: Created per request (lines 39 & 76)
+let password_service = Argon2PasswordService::new();
+```
+
+**Impact**: Minor performance overhead, but violates clean architecture principles.
+
+**Recommendation**: Inject as shared state via `web::Data`, similar to [TokenService](file:///home/userr/project/apex-boilerplate/crates/apex-core/src/ports/auth.rs#17-29):
+
+```diff
+  pub async fn register(
+      state: web::Data<AppState>,
+      token_service: web::Data<Arc<dyn TokenService>>,
++     password_service: web::Data<Arc<dyn PasswordService>>,
+      body: web::Json<RegisterUserRequest>,
+  ) -> AppResult<HttpResponse> {
+-     let password_service = Argon2PasswordService::new();
++     // Use injected service
+```
+
+---
+
+### 2. N+1 Query Pattern in Repository Save
+
+**File**: [postgres_repo.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/database/postgres_repo.rs#L49-91)
+
+**Issue**: The [save](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/database/postgres_repo.rs#49-93) method performs a [find_by_id](file:///home/userr/project/apex-boilerplate/apps/api-server/src/state.rs#25-32) before every insert/update to determine the operation.
+
+```rust
+// Current: Extra query every save
+let existing = UserEntity::find_by_id(user.id).one(&self.db).await?;
+let model = if existing.is_some() { /* update */ } else { /* insert */ };
+```
+
+**Impact**: Doubles database queries for every save operation.
+
+**Recommendation**: Use SeaORM's upsert pattern with `on_conflict`:
+
+```rust
+// Better: Single upsert query
+let active_model = user::ActiveModel { /* ... */ };
+active_model
+    .insert(&self.db)
+    .on_conflict(
+        sea_query::OnConflict::column(user::Column::Id)
+            .update_columns([user::Column::Email, user::Column::PasswordHash, user::Column::UpdatedAt])
+            .to_owned()
+    )
+    .exec(&self.db)
+    .await
+```
+
+---
+
+### 3. RwLock Blocking in Async Cache
+
+**File**: [memory.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/cache/memory.rs#L47-60)
+
+**Issue**: Using `std::sync::RwLock` in async context blocks the executor.
+
+```rust
+// Current: Blocking lock in async function
+async fn get(&self, key: &str) -> Option<String> {
+    let store = self.store.read().ok()?;  // ⚠️ Blocks!
+```
+
+**Impact**: Can cause thread starvation under high concurrency.
+
+**Recommendation**: Use `tokio::sync::RwLock` instead:
+
+```diff
+- use std::sync::RwLock;
++ use tokio::sync::RwLock;
+
+  pub struct InMemoryCache {
+      store: RwLock<HashMap<String, CacheEntry>>,
+  }
+
+  async fn get(&self, key: &str) -> Option<String> {
+-     let store = self.store.read().ok()?;
++     let store = self.store.read().await;
+```
+
+---
+
+### 4. Missing Retry Logic in Job Queue
+
+**File**: [memory.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/jobs/memory.rs#L155-173)
+
+**Issue**: On `JobResult::Retry`, the code logs and increments `pending`, but never re-enqueues the job.
+
+```rust
+// Current: Job is not actually re-enqueued!
+JobResult::Retry(reason) => {
+    if job.attempts < job.max_attempts {
+        stats.pending.fetch_add(1, Ordering::Relaxed);
+        // ⚠️ Missing: self.job_sender.send(job).await
+    }
+```
+
+**Impact**: Jobs marked for retry are silently dropped.
+
+**Recommendation**: Actually re-enqueue the job or use a delay channel.
+
+---
+
+## 🟠 Medium Priority Refactoring
+
+### 5. Hardcoded `expires_in` in Auth Response
+
+**Files**: 
+- [auth.rs L56-57](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs#L56-57)
+- [auth.rs L93](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs#L93)
+
+**Issue**: `expires_in: 86400` is hardcoded instead of derived from JWT config.
+
+```rust
+// Current: Hardcoded, doesn't match actual JWT expiration
+expires_in: 86400, // 24 hours
+```
+
+**Recommendation**: Calculate from token service configuration or return actual expiry.
+
+---
+
+### 6. Missing `created_at` in `/me` Endpoint
+
+**File**: [auth.rs](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs#L98-104)
+
+**Issue**: Returns `chrono::Utc::now()` instead of actual user data.
+
+```rust
+// Current: Fake timestamp
+pub async fn me(identity: Identity) -> AppResult<HttpResponse> {
+    Ok(HttpResponse::Ok().json(UserResponse {
+        created_at: chrono::Utc::now().to_rfc3339(), // ⚠️ Should come from DB
+    }))
+}
+```
+
+**Recommendation**: Fetch user from repository or embed in JWT claims.
+
+---
+
+### 7. Deprecated `chrono::Duration::hours`
+
+**File**: [jwt.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/auth/jwt.rs#L80)
+
+**Issue**: `chrono::Duration::hours()` is deprecated.
+
+```rust
+// Current: Deprecated API
+let exp = now + Duration::hours(self.config.expiration_hours);
+```
+
+**Recommendation**: Use `TimeDelta::hours()` for chrono 0.4.35+:
+
+```diff
+- use chrono::{Duration, Utc};
++ use chrono::{TimeDelta, Utc};
+
+- let exp = now + Duration::hours(self.config.expiration_hours);
++ let exp = now + TimeDelta::hours(self.config.expiration_hours);
+```
+
+---
+
+### 8. Generic Repository Trait Pattern
+
+**File**: [repository.rs](file:///home/userr/project/apex-boilerplate/crates/apex-core/src/ports/repository.rs)
+
+**Issue**: Only [UserRepository](file:///home/userr/project/apex-boilerplate/crates/apex-core/src/ports/repository.rs#10-23) exists; each entity needs its own repository trait.
+
+**Recommendation**: Create a generic base repository trait:
+
+```rust
+#[async_trait]
+pub trait Repository<T, ID>: Send + Sync {
+    async fn find_by_id(&self, id: ID) -> Result<Option<T>, RepoError>;
+    async fn save(&self, entity: T) -> Result<T, RepoError>;
+    async fn delete(&self, id: ID) -> Result<(), RepoError>;
+}
+
+// Then UserRepository extends with email-specific methods
+pub trait UserRepository: Repository<User, Uuid> {
+    async fn find_by_email(&self, email: &str) -> Result<Option<User>, RepoError>;
+}
+```
+
+---
+
+### 9. Manual Validation Logic in Handlers
+
+**File**: [auth.rs](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs#L23-31)
+
+**Issue**: Inline validation mixed with business logic.
+
+```rust
+// Current: Manual validation
+if req.email.is_empty() || !req.email.contains('@') {
+    return Err(AppError::BadRequest("Invalid email address".to_string()));
+}
+if req.password.len() < 8 {
+    return Err(AppError::BadRequest("...".to_string()));
+}
+```
+
+**Recommendation**: Use `validator` crate with derive macros:
+
+```rust
+use validator::Validate;
+
+#[derive(Deserialize, Validate)]
+pub struct RegisterUserRequest {
+    #[validate(email(message = "Invalid email address"))]
+    pub email: String,
+    #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    pub password: String,
+}
+```
+
+---
+
+### 10. No Background Cleanup for Expired Cache Entries
+
+**File**: [memory.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/cache/memory.rs)
+
+**Issue**: Expired entries are only removed on access (lazy cleanup).
+
+**Impact**: Memory can grow unbounded with many expired entries that are never read.
+
+**Recommendation**: Add a periodic cleanup task:
+
+```rust
+impl InMemoryCache {
+    pub fn with_cleanup(interval: Duration) -> Self {
+        let cache = Self::new();
+        let store = cache.store.clone();
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(interval);
+            loop {
+                interval.tick().await;
+                if let Ok(mut store) = store.write() {
+                    store.retain(|_, entry| !Self::is_expired(entry));
+                }
+            }
+        });
+        
+        cache
+    }
+}
+```
+
+---
+
+## 🟢 Low Priority Improvements
+
+### 11. Duplicate Constraint Detection via String Matching
+
+**File**: [postgres_repo.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/database/postgres_repo.rs#L83-88)
+
+**Issue**: Fragile error detection using string contains.
+
+```rust
+// Current: Brittle string matching
+if e.to_string().contains("duplicate") || e.to_string().contains("unique") {
+    RepoError::Constraint("Email already exists".to_string())
+```
+
+**Recommendation**: Use SeaORM's `DbErr` variants or SQLx error codes for reliable detection.
+
+---
+
+### 12. Consider Using `Arc<str>` for Config Strings
+
+**Files**: Multiple config structs
+
+**Issue**: Repeated `.clone()` on `String` configs in closure captures.
+
+**Recommendation**: Use `Arc<str>` for frequently cloned config values like `issuer`, `service_name`.
+
+---
+
+## Security Considerations
+
+> [!CAUTION]
+> Review these security-related items:
+
+1. **JWT Secret Default**: `"change-me-in-production"` in [jwt.rs L61](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/auth/jwt.rs#L61) - Add validation to reject default in production.
+
+2. **Email Logging**: Email is logged in debug statements ([postgres_repo.rs L38](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/database/postgres_repo.rs#L38)) - Consider PII masking.
+
+3. **No Rate Limiting on Auth Endpoints**: Authentication routes should have stricter rate limits.
+
+---
+
+## Summary Table
+
+| # | Issue | File | Effort | Impact |
+|---|-------|------|--------|--------|
+| 1 | Password service per request | [handlers/auth.rs](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs) | Low | Medium |
+| 2 | N+1 query in save | [postgres_repo.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/database/postgres_repo.rs) | Medium | High |
+| 3 | Blocking RwLock | [cache/memory.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/cache/memory.rs) | Low | High |
+| 4 | Missing job retry | [jobs/memory.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/jobs/memory.rs) | Medium | High |
+| 5 | Hardcoded expires_in | [handlers/auth.rs](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs) | Low | Low |
+| 6 | Fake created_at | [handlers/auth.rs](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs) | Low | Low |
+| 7 | Deprecated Duration | [auth/jwt.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/auth/jwt.rs) | Low | Low |
+| 8 | Generic repository | [ports/repository.rs](file:///home/userr/project/apex-boilerplate/crates/apex-core/src/ports/repository.rs) | High | Medium |
+| 9 | Manual validation | [handlers/auth.rs](file:///home/userr/project/apex-boilerplate/apps/api-server/src/handlers/auth.rs) | Medium | Medium |
+| 10 | No cache cleanup | [cache/memory.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/cache/memory.rs) | Medium | Medium |
+| 11 | String error matching | [postgres_repo.rs](file:///home/userr/project/apex-boilerplate/crates/apex-infra/src/database/postgres_repo.rs) | Low | Low |
+| 12 | String cloning | various | Low | Low |
+
+---
+
+## Questions for You
+
+1. Which of these items would you like me to implement first?
+2. Are there any specific areas you'd like me to dive deeper into?
+3. Should I also look at test coverage for these components?

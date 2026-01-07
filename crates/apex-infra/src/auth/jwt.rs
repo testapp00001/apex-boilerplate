@@ -1,6 +1,6 @@
 //! JWT token service implementation.
 
-use chrono::{Duration, Utc};
+use chrono::{TimeDelta, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -77,7 +77,7 @@ impl TokenService for JwtTokenService {
         roles: Vec<String>,
     ) -> Result<String, AuthError> {
         let now = Utc::now();
-        let exp = now + Duration::hours(self.config.expiration_hours);
+        let exp = now + TimeDelta::hours(self.config.expiration_hours);
 
         let claims = Claims {
             sub: user_id.to_string(),
@@ -112,5 +112,9 @@ impl TokenService for JwtTokenService {
             roles: token_data.claims.roles,
             exp: token_data.claims.exp,
         })
+    }
+
+    fn expiration_seconds(&self) -> i64 {
+        self.config.expiration_hours * 3600
     }
 }

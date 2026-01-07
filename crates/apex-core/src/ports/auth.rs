@@ -25,6 +25,9 @@ pub trait TokenService: Send + Sync {
 
     /// Validate and decode a token.
     fn validate_token(&self, token: &str) -> Result<TokenClaims, AuthError>;
+
+    /// Get token expiration in seconds.
+    fn expiration_seconds(&self) -> i64;
 }
 
 /// Password hashing service.
