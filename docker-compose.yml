@@ -16,6 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dev
     container_name: apex-api
     ports:
       - "8080:8080"

@@ -4,7 +4,6 @@
 //! Jobs are stored in memory and processed by local workers.
 //! Note: Jobs are lost on server restart.
 
-use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
