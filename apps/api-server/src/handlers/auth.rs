@@ -31,7 +31,7 @@ pub async fn register(
     }
 
     // Check if user already exists
-    if let Some(_) = state.user_repo.find_by_email(&req.email).await? {
+    if let Some(_) = state.users.find_by_email(&req.email).await? {
         return Err(AppError::Conflict("Email already registered".to_string()));
     }
 
@@ -42,7 +42,7 @@ pub async fn register(
 
     // Create user
     let user = User::new(req.email.clone(), password_hash);
-    let saved_user = state.user_repo.save(user).await?;
+    let saved_user = state.users.save(user).await?;
 
     // Generate token
     let token = token_service
@@ -67,7 +67,7 @@ pub async fn login(
 
     // Find user by email
     let user = state
-        .user_repo
+        .users
         .find_by_email(&req.email)
         .await?
         .ok_or_else(|| AppError::Unauthorized)?;

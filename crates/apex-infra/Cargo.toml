@@ -42,3 +42,10 @@ postgres = ["sea-orm"]
 auth = ["jsonwebtoken", "argon2"]
 rate-limit = ["governor"]
 redis = ["dep:redis"]
+
+[dev-dependencies]
+sea-orm = { workspace = true, features = [
+    "mock",
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+] }

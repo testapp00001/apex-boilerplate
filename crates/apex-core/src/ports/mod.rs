@@ -13,4 +13,4 @@ pub use cache::{Cache, CacheError};
 pub use job_queue::{Job, JobQueue, JobQueueError, JobResult, QueueStats};
 pub use pubsub::{PubSub, PubSubError, PubSubMessage};
 pub use rate_limit::{RateLimitError, RateLimitResult, RateLimiter};
-pub use repository::UserRepository;
+pub use repository::{BaseRepository, PostRepository, UserRepository};
