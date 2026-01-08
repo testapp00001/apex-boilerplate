@@ -2,4 +2,4 @@
 
 mod memory;
 
-pub use memory::InMemoryRateLimiter;
+pub use memory::{InMemoryRateLimiter, RateLimitConfig};

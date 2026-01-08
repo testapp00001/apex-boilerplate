@@ -58,7 +58,19 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, RepoError> {
-        tracing::debug!(user_email = %email, "Finding user by email");
+        // Mask email for logging to avoid PII in logs
+        let masked = if let Some(at_pos) = email.find('@') {
+            let (local, domain) = email.split_at(at_pos);
+            let masked_local = if local.len() > 1 {
+                format!("{}***", &local[..1])
+            } else {
+                "***".to_string()
+            };
+            format!("{}{}", masked_local, domain)
+        } else {
+            "***".to_string()
+        };
+        tracing::debug!(user_email = %masked, "Finding user by email");
 
         let result = UserEntity::find()
             .filter(user::Column::Email.eq(email))

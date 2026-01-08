@@ -56,9 +56,26 @@ impl JwtTokenService {
     }
 
     pub fn from_env() -> Self {
+        let secret =
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string());
+
+        // Warn if using default secret in production
+        if secret == "change-me-in-production" {
+            let is_production = std::env::var("RUST_ENV")
+                .map(|v| v == "production" || v == "prod")
+                .unwrap_or(false);
+
+            if is_production {
+                tracing::error!(
+                    "SECURITY: Using default JWT secret in production! Set JWT_SECRET environment variable."
+                );
+            } else {
+                tracing::warn!("Using default JWT secret. Set JWT_SECRET for production use.");
+            }
+        }
+
         let config = JwtConfig {
-            secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "change-me-in-production".to_string()),
+            secret,
             expiration_hours: std::env::var("JWT_EXPIRATION_HOURS")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -116,5 +133,89 @@ impl TokenService for JwtTokenService {
 
     fn expiration_seconds(&self) -> i64 {
         self.config.expiration_hours * 3600
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> JwtConfig {
+        JwtConfig {
+            secret: "test-secret-key".to_string(),
+            expiration_hours: 1,
+            issuer: "test-issuer".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_generate_token_success() {
+        let service = JwtTokenService::new(test_config());
+        let user_id = Uuid::new_v4();
+
+        let result = service.generate_token(user_id, "test@example.com", vec!["user".to_string()]);
+
+        assert!(result.is_ok());
+        let token = result.unwrap();
+        assert!(!token.is_empty());
+    }
+
+    #[test]
+    fn test_validate_token_success() {
+        let service = JwtTokenService::new(test_config());
+        let user_id = Uuid::new_v4();
+        let email = "test@example.com";
+
+        let token = service
+            .generate_token(user_id, email, vec!["admin".to_string()])
+            .unwrap();
+
+        let claims = service.validate_token(&token).unwrap();
+
+        assert_eq!(claims.user_id, user_id);
+        assert_eq!(claims.email, email);
+        assert_eq!(claims.roles, vec!["admin".to_string()]);
+    }
+
+    #[test]
+    fn test_validate_invalid_token() {
+        let service = JwtTokenService::new(test_config());
+
+        let result = service.validate_token("invalid-token");
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AuthError::InvalidToken(_)));
+    }
+
+    #[test]
+    fn test_validate_wrong_issuer_token() {
+        let service1 = JwtTokenService::new(JwtConfig {
+            secret: "same-secret".to_string(),
+            expiration_hours: 1,
+            issuer: "issuer1".to_string(),
+        });
+        let service2 = JwtTokenService::new(JwtConfig {
+            secret: "same-secret".to_string(),
+            expiration_hours: 1,
+            issuer: "issuer2".to_string(),
+        });
+
+        let token = service1
+            .generate_token(Uuid::new_v4(), "test@test.com", vec![])
+            .unwrap();
+
+        let result = service2.validate_token(&token);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_expiration_seconds() {
+        let service = JwtTokenService::new(JwtConfig {
+            secret: "test".to_string(),
+            expiration_hours: 24,
+            issuer: "test".to_string(),
+        });
+
+        assert_eq!(service.expiration_seconds(), 86400);
     }
 }

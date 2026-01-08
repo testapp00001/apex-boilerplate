@@ -31,4 +31,4 @@ pub use pubsub::InMemoryPubSub;
 pub use auth::{Argon2PasswordService, JwtTokenService};
 
 #[cfg(feature = "rate-limit")]
-pub use rate_limit::InMemoryRateLimiter;
+pub use rate_limit::{InMemoryRateLimiter, RateLimitConfig};
