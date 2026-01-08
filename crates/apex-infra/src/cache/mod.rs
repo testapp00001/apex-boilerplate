@@ -4,8 +4,7 @@ mod memory;
 
 pub use memory::InMemoryCache;
 
-// Redis implementation will be added when redis feature is enabled
-// #[cfg(feature = "redis")]
-// mod redis_cache;
-// #[cfg(feature = "redis")]
-// pub use redis_cache::RedisCache;
+#[cfg(feature = "redis")]
+mod redis;
+#[cfg(feature = "redis")]
+pub use self::redis::{RedisCache, RedisConfig};

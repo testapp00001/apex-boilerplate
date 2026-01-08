@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use async_trait::async_trait;
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{Mutex, mpsc};
 
 use apex_core::ports::{Job, JobQueue, JobQueueError, JobResult, QueueStats};
 
@@ -35,7 +35,6 @@ impl Default for InMemoryJobQueueConfig {
 
 /// In-memory job queue.
 pub struct InMemoryJobQueue {
-    queue: Arc<Mutex<VecDeque<Job>>>,
     stats: Arc<JobStats>,
     config: InMemoryJobQueueConfig,
     job_sender: mpsc::Sender<Job>,
@@ -54,7 +53,6 @@ impl InMemoryJobQueue {
         let (tx, rx) = mpsc::channel(config.max_size.max(100));
 
         Self {
-            queue: Arc::new(Mutex::new(VecDeque::new())),
             stats: Arc::new(JobStats {
                 pending: AtomicUsize::new(0),
                 processing: AtomicUsize::new(0),

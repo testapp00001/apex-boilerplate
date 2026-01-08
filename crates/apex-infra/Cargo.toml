@@ -14,6 +14,8 @@ tracing.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+futures = "0.3"
 
 # Database (optional - enabled with postgres feature)
 sea-orm = { workspace = true, optional = true }
@@ -25,14 +27,18 @@ argon2 = { workspace = true, optional = true }
 # Rate limiting (optional - enabled with rate-limit feature)
 governor = { workspace = true, optional = true }
 
+# Redis (optional - enabled with redis feature)
+redis = { workspace = true, optional = true }
+
 [features]
 default = ["full"]
 
 # Feature bundles
-full = ["postgres", "auth", "rate-limit"]
-minimal = []                              # No external dependencies
+full = ["postgres", "auth", "rate-limit", "redis"]
+minimal = []                                       # No external dependencies
 
 # Individual features
 postgres = ["sea-orm"]
 auth = ["jsonwebtoken", "argon2"]
 rate-limit = ["governor"]
+redis = ["dep:redis"]

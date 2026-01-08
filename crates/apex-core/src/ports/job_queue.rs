@@ -60,8 +60,6 @@ pub enum JobResult {
 }
 
 /// Job handler function type.
-pub type JobHandler =
-    Box<dyn Fn(Job) -> Pin<Box<dyn Future<Output = JobResult> + Send>> + Send + Sync>;
 
 /// Job queue trait - abstraction over job queue backends.
 #[async_trait]

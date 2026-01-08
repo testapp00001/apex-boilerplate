@@ -12,8 +12,6 @@ pub struct PubSubMessage {
 }
 
 /// Handler for incoming messages.
-pub type MessageHandler =
-    Box<dyn Fn(PubSubMessage) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
 /// Pub/Sub trait - abstraction over pub/sub backends.
 #[async_trait]

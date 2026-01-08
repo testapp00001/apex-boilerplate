@@ -50,6 +50,9 @@ argon2 = "0.5"
 # Rate limiting
 governor = "0.8"
 
+# Redis
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+
 # Background Jobs & Scheduling
 tokio-cron-scheduler = "0.13"
 
